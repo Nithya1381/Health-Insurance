@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Document Manager</title>
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .upload-container {
+            margin: 20px 0;
+            padding: 30px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .documents-list {
+            margin-top: 30px;
+        }
+        .document-item {
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-success {
+            color: #28a745;
+        }
+        .status-pending {
+            color: #ffc107;
+        }
+        .nav-links {
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #007bff;
+            margin-right: 20px;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .messages {
+            margin: 20px 0;
+        }
+        .message {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="{% url 'main:chat' %}">← Back to Chat</a>
+        <a href="{% url 'main:view_documents' %}">View Stored Documents</a>
+    </div>
+
+    <h1>Insurance Document Manager</h1>
+
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="upload-container">
+        <h2>Upload New Document</h2>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="file" name="document" accept=".pdf" required>
+            <button type="submit">Upload Document</button>
+        </form>
+    </div>
+
+    <div class="documents-list">
+        <h2>Uploaded Documents</h2>
+        {% if documents %}
+            {% for doc in documents %}
+                <div class="document-item">
+                    <div>
+                        <strong>{{ doc.file.name }}</strong>
+                        <br>
+                        <small>Uploaded: {{ doc.uploaded_at|date:"F j, Y, g:i a" }}</small>
+                    </div>
+                    <div class="status-{% if doc.processed %}success{% else %}pending{% endif %}">
+                        {% if doc.processed %}
+                            ✓ Processed
+                        {% else %}
+                            Processing...
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No documents uploaded yet.</p>
+        {% endif %}
+    </div>
+</body>
+</html> 

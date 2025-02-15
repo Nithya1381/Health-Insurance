@@ -382,8 +382,15 @@ def get_insurance_response(question: str, conversation_chain) -> str:
         # Get the chat history from conversation chain's memory
         chat_history = conversation_chain.memory.chat_memory.messages if conversation_chain.memory else []
         
-        # Get relevant documents using the conversation chain's retriever
-        relevant_docs = conversation_chain.retriever.get_relevant_documents(question)
+        # First, get initial relevant documents for context
+        initial_docs = conversation_chain.retriever.get_relevant_documents(question)
+        
+        # Refine the query using context
+        refined_query = refine_query(question, initial_docs)
+        print(f"Refined query: {refined_query}")  # Debug log
+        
+        # Get relevant documents using the refined query
+        relevant_docs = conversation_chain.retriever.get_relevant_documents(refined_query)
         
         # Extract content and metadata from relevant documents
         context = []
@@ -396,8 +403,8 @@ def get_insurance_response(question: str, conversation_chain) -> str:
         # Create a prompt that includes both context and chat history
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
         prompt_template = PromptTemplate(
-            input_variables=["question", "context", "chat_history"],
-            template="""You are an AI assistant for a health insurance company. Use the following context from insurance documents and chat history to answer the user's question.
+            input_variables=["original_question", "refined_question", "context", "chat_history"],
+            template="""You are an AI assistant for a health insurance company. Use the following context and chat history to answer the user's question.
             If the information is not in the context, politely say that you don't have that specific information.
 
             Previous Chat History:
@@ -406,11 +413,13 @@ def get_insurance_response(question: str, conversation_chain) -> str:
             Context from insurance documents:
             {context}
 
-            User Question: {question}
+            Original Question: {original_question}
+            Refined Question: {refined_question}
 
-            Please provide a clear, professional response based on the provided context and chat history. Include specific details from the documents when available.
-            """
-        )
+            Please provide a clear, professional response based on the provided context and chat history. 
+            Include specific details from the documents when available.
+            If you're making assumptions, state them clearly.
+            """)
         
         # Format context and chat history for the prompt
         context_text = "\n\n".join([
@@ -428,7 +437,8 @@ def get_insurance_response(question: str, conversation_chain) -> str:
         # Get response using the context and chat history
         chain = LLMChain(llm=llm, prompt=prompt_template)
         response = chain.run(
-            question=question,
+            original_question=question,
+            refined_question=refined_query,
             context=context_text,
             chat_history=chat_history_text
         )
@@ -509,3 +519,38 @@ def generate_speech(text: str, language_code: str = "en-IN", speaker: str = "mee
         
     except requests.exceptions.RequestException as e:
         raise Exception(f"Failed to generate speech: {str(e)}")
+
+def refine_query(question: str, context_docs=None) -> str:
+    """Refine the input query to improve context relevance"""
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+    
+    # If we have context docs, include them in refinement
+    context_text = ""
+    if context_docs:
+        context_text = "\n".join([
+            f"Document {i+1}: {doc.page_content[:200]}..."
+            for i, doc in enumerate(context_docs[:2])
+        ])
+    
+    prompt_template = PromptTemplate(
+        input_variables=["question", "context"],
+        template="""Given the user's insurance-related question and available context, help refine the query to be more specific and focused.
+        If the question is vague, make it more precise. If it's complex, break it down.
+        
+        Available Context:
+        {context}
+        
+        Original Question: {question}
+        
+        Instructions:
+        1. Identify key insurance terms and concepts
+        2. Add relevant context if missing
+        3. Make implicit questions explicit
+        4. Focus on specific policy details if mentioned
+        
+        Return only the refined query without explanations.
+        """)
+    
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+    refined_query = chain.run(question=question, context=context_text)
+    return refined_query.strip()

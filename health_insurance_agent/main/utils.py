@@ -4,6 +4,9 @@ import tempfile
 import uuid
 from urllib.parse import quote
 
+import requests
+from langchain.memory import ConversationBufferMemory
+
 try:
     import PyPDF2
 except ImportError:
@@ -273,12 +276,15 @@ def get_conversation_chain():
             temperature=0.7,
             model_name="gpt-3.5-turbo"
         )
+
+        memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
         
         conversation_chain = ConversationalRetrievalChain.from_llm(
             llm=llm,
             retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
             return_source_documents=True,
-            verbose=True
+            verbose=True,
+            memory=memory
         )
         
         return conversation_chain
@@ -373,16 +379,11 @@ def get_general_chat_response(question: str) -> str:
 def get_insurance_response(question: str, conversation_chain) -> str:
     """Handle insurance-related questions using the document knowledge base"""
     try:
-        # First, search for relevant documents
-        embedding = OpenAIEmbeddings()
-        vectorstore = FAISS.load_local(
-            VECTOR_STORE_DIR, 
-            embedding,
-            allow_dangerous_deserialization=True
-        )
+        # Get the chat history from conversation chain's memory
+        chat_history = conversation_chain.memory.chat_memory.messages if conversation_chain.memory else []
         
-        # Get relevant documents
-        relevant_docs = vectorstore.similarity_search(question, k=3)
+        # Get relevant documents using the conversation chain's retriever
+        relevant_docs = conversation_chain.retriever.get_relevant_documents(question)
         
         # Extract content and metadata from relevant documents
         context = []
@@ -392,23 +393,26 @@ def get_insurance_response(question: str, conversation_chain) -> str:
                 "metadata": doc.metadata.get("extracted_info", {})
             })
         
-        # Create a prompt that includes the context
+        # Create a prompt that includes both context and chat history
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
         prompt_template = PromptTemplate(
-            input_variables=["question", "context"],
-            template="""You are an AI assistant for a health insurance company. Use the following context from insurance documents to answer the user's question.
+            input_variables=["question", "context", "chat_history"],
+            template="""You are an AI assistant for a health insurance company. Use the following context from insurance documents and chat history to answer the user's question.
             If the information is not in the context, politely say that you don't have that specific information.
+
+            Previous Chat History:
+            {chat_history}
 
             Context from insurance documents:
             {context}
 
             User Question: {question}
 
-            Please provide a clear, professional response based on the provided context. Include specific details from the documents when available.
+            Please provide a clear, professional response based on the provided context and chat history. Include specific details from the documents when available.
             """
         )
         
-        # Format context for the prompt
+        # Format context and chat history for the prompt
         context_text = "\n\n".join([
             f"Document {i+1}:\n"
             f"Content: {doc['content']}\n"
@@ -416,14 +420,89 @@ def get_insurance_response(question: str, conversation_chain) -> str:
             for i, doc in enumerate(context)
         ])
         
-        # Get response using the context
+        chat_history_text = "\n".join([
+            f"{'User' if i % 2 == 0 else 'Assistant'}: {msg.content}"
+            for i, msg in enumerate(chat_history)
+        ])
+        
+        # Get response using the context and chat history
         chain = LLMChain(llm=llm, prompt=prompt_template)
         response = chain.run(
             question=question,
-            context=context_text
+            context=context_text,
+            chat_history=chat_history_text
         )
+        
+        # Add the current interaction to the conversation chain's memory
+        conversation_chain.memory.chat_memory.add_user_message(question)
+        conversation_chain.memory.chat_memory.add_ai_message(response)
         
         return response
 
     except Exception as e:
         return f"I apologize, but I encountered an error retrieving your insurance information: {str(e)}"
+
+def speech_to_text(request, audio_file, target_language):
+    """Convert speech to text using Sarvam AI API"""
+    try:
+        url = "https://api.sarvam.ai/speech-to-text"
+
+        payload = {
+            'model': 'saarika:v2',
+            'language_code': target_language,
+            'with_timesteps': 'false'
+        }
+
+        file_name = audio_file.split('/')[-1]
+
+        # Use MP3 file instead of WAV
+        files = [
+            ('file', (file_name, open(audio_file, 'rb'), 'audio/mpeg'))
+        ]
+
+        headers = {
+            'api-subscription-key': os.getenv('SARVAM_API_KEY')
+        }
+
+        response = requests.post(url, headers=headers, data=payload, files=files)
+
+        return response.text
+    
+    except Exception as e:
+        print(f"Error: Speech to Text Conversion API :: {e}")
+        return str(e)
+
+def generate_speech(text: str, language_code: str = "en-IN", speaker: str = "meera") -> dict:
+    """Generate speech from text using Sarvam.ai API"""
+    try:
+        url = "https://api.sarvam.ai/text-to-speech"
+        
+        payload = {
+            "inputs": [text],
+            "target_language_code": language_code,
+            "speaker": speaker,
+            "speech_sample_rate": 8000,
+            "enable_preprocessing": True,
+            "model": "bulbul:v1"
+        }
+        
+        headers = {
+            'api-subscription-key': os.getenv('SARVAM_API_KEY'),
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        
+        # Get the response data
+        response_data = response.json()
+        
+        # Convert audio data to base64 if it's not already
+        if 'audio_content' in response_data and not response_data['audio_content'].startswith('data:audio'):
+            audio_content = response_data['audio_content']
+            response_data['audio_content'] = f'data:audio/wav;base64,{audio_content}'
+        
+        return response_data
+        
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Failed to generate speech: {str(e)}")

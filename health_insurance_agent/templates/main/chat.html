@@ -5,107 +5,519 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Health Insurance Assistant</title>
     <style>
+        :root {
+            --primary-color: #007AFF;
+            --bg-color: #F7F7F8;
+            --chat-bg: #FFFFFF;
+            --user-msg-bg: #007AFF;
+            --assistant-msg-bg: #F7F7F8;
+            --border-color: #E5E5E5;
+        }
+
         body {
-            max-width: 800px;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-color);
+            color: #343541;
+        }
+
+        .container {
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            font-family: Arial, sans-serif;
         }
-        .chat-container {
-            height: 70vh;
-            overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 20px;
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border-color);
             margin-bottom: 20px;
-            border-radius: 5px;
         }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .manage-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .chat-container {
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+            padding: 20px;
+            background: var(--chat-bg);
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            scroll-behavior: smooth;
+        }
+
+        .message-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px 0;
+        }
+
         .message {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 5px;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            max-width: 80%;
+            line-height: 1.5;
         }
+
         .user-message {
-            background-color: #e3f2fd;
-            margin-left: 20%;
+            background-color: var(--user-msg-bg);
+            color: white;
+            margin-left: auto;
         }
+
         .assistant-message {
-            background-color: #f5f5f5;
-            margin-right: 20%;
+            background-color: var(--assistant-msg-bg);
+            color: #343541;
+            margin-right: auto;
         }
+
+        .typing-indicator {
+            display: none;
+            padding: 15px;
+            background: var(--assistant-msg-bg);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            width: fit-content;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            background: #666;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        .input-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+
         .input-container {
+            max-width: 900px;
+            margin: 0 auto;
             display: flex;
             gap: 10px;
         }
-        #user-input {
+
+        .voice-input-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"] {
             flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
         }
+
+        input[type="text"]:focus {
+            border-color: var(--primary-color);
+        }
+
         button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
+            padding: 12px 24px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        button:hover {
+
+        #recordButton {
+            background-color: #28a745;
+            color: white;
+        }
+
+        #recordButton:hover {
+            background-color: #218838;
+        }
+
+        .recording {
+            animation: pulse 1.5s infinite;
+            background-color: #dc3545 !important;
+        }
+
+        button[type="submit"] {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        button[type="submit"]:hover {
             background-color: #0056b3;
         }
-        .system-message {
-            background-color: #fff3cd;
-            margin: 10px 0;
-            text-align: center;
+
+        #recordingStatus {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .message-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+        }
+        
+        .play-button {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .play-button:hover {
+            text-decoration: underline;
+        }
+        
+        .play-button svg {
+            width: 16px;
+            height: 16px;
         }
     </style>
 </head>
 <body>
-    <h1>AI Health Insurance Assistant</h1>
-    
-    <div style="margin-bottom: 20px;">
-        <a href="{% url 'main:uploads' %}" style="color: #007bff; text-decoration: none;">
-            Manage Documents →
-        </a>
-    </div>
+    <div class="container">
+        <div class="header">
+            <h1>AI Health Insurance Assistant</h1>
+            <a href="{% url 'main:uploads' %}" class="manage-link">
+                Manage Documents →
+            </a>
+        </div>
 
-    {% if messages %}
-    <div class="messages" style="margin: 20px 0;">
-        {% for message in messages %}
-            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}" 
-                 style="padding: 10px; margin: 5px 0; border-radius: 5px; 
-                        {% if message.tags == 'error' %}
-                            background-color: #f8d7da; color: #721c24;
-                        {% else %}
-                            background-color: #d4edda; color: #155724;
-                        {% endif %}">
-                {{ message }}
+        <div class="chat-container" id="chat-container">
+            {% for chat_message in chat_messages %}
+                <div class="message-wrapper">
+                    <div class="message {% if chat_message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                        {{ chat_message.content }}
+                    </div>
+                </div>
+            {% endfor %}
+            <div class="message-wrapper">
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="typing-dots">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                </div>
             </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+        </div>
 
-    <div class="chat-container" id="chat-container">
-        {% for chat_message in chat_messages %}
-            <div class="message {% if chat_message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
-                {{ chat_message.content }}
+        <div class="input-section">
+            <div class="input-container">
+                <div class="voice-input-container">
+                    <button id="recordButton" type="button">
+                        Start Recording
+                    </button>
+                    <span id="recordingStatus"></span>
+                </div>
+                <form method="post" class="input-container">
+                    {% csrf_token %}
+                    <input type="text" id="user-input" name="message" placeholder="Ask about insurance policies..." required>
+                    <button type="submit">Send</button>
+                </form>
             </div>
-        {% endfor %}
+        </div>
     </div>
-
-    <form method="post" class="input-container">
-        {% csrf_token %}
-        <input type="text" id="user-input" name="message" placeholder="Ask about insurance policies..." required>
-        <button type="submit">Send</button>
-    </form>
 
     <script>
-        // Scroll to bottom of chat container
         const chatContainer = document.getElementById('chat-container');
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        const typingIndicator = document.getElementById('typingIndicator');
         
-        // Focus input field
-        document.getElementById('user-input').focus();
+        // Add audio context
+        let audioContext;
+        let currentAudio = null;
+
+        // Function to play audio from base64
+        async function playAudio(audioData) {
+            try {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+
+                const playButton = event.target.closest('.play-button');
+                console.log("Audio data received:", audioData); // Debug log
+
+                // Create new audio element
+                const audio = new Audio();
+                
+                // Debug listener
+                audio.addEventListener('loadeddata', () => {
+                    console.log("Audio loaded successfully");
+                });
+
+                // Set up event listeners
+                audio.addEventListener('playing', () => {
+                    console.log("Audio started playing"); // Debug log
+                    if (playButton) {
+                        playButton.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                            </svg>
+                            Playing...
+                        `;
+                    }
+                });
+
+                audio.addEventListener('ended', () => {
+                    console.log("Audio finished playing"); // Debug log
+                    if (playButton) {
+                        playButton.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                            Play Response
+                        `;
+                    }
+                    currentAudio = null;
+                });
+
+                audio.addEventListener('error', (e) => {
+                    console.error('Audio error:', e.target.error); // Detailed error logging
+                    if (playButton) {
+                        playButton.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                            Error Playing
+                        `;
+                    }
+                    currentAudio = null;
+                });
+
+                // Try alternative audio format if WAV doesn't work
+                if (!audioData.startsWith('data:audio/wav')) {
+                    audioData = audioData.replace('data:audio/wav', 'data:audio/mp3');
+                }
+
+                // Set the source and load the audio
+                audio.src = audioData;
+                
+                // Play the audio
+                try {
+                    await audio.play();
+                    console.log("Play command issued successfully"); // Debug log
+                    currentAudio = audio;
+                } catch (playError) {
+                    console.error('Playback error:', playError);
+                    throw playError;
+                }
+
+            } catch (error) {
+                console.error('Error playing audio:', error);
+                const playButton = event.target.closest('.play-button');
+                if (playButton) {
+                    playButton.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        Error Playing
+                    `;
+                }
+            }
+        }
+
+        // Function to add message to chat
+        function addMessageToChat(content, isUser = true, speechData = null) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message-wrapper';
+            
+            const message = document.createElement('div');
+            message.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+            message.textContent = content;
+            
+            if (!isUser && speechData) {
+                const controls = document.createElement('div');
+                controls.className = 'message-controls';
+                
+                const playButton = document.createElement('button');
+                playButton.className = 'play-button';
+                playButton.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    Play Response
+                `;
+                playButton.onclick = () => playAudio(speechData.audio_content);
+                
+                controls.appendChild(playButton);
+                message.appendChild(controls);
+            }
+            
+            wrapper.appendChild(message);
+            chatContainer.insertBefore(wrapper, typingIndicator.parentElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Function to show/hide typing indicator
+        function toggleTyping(show) {
+            typingIndicator.style.display = show ? 'block' : 'none';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Function to submit message
+        async function submitMessage(message) {
+            addMessageToChat(message, true);
+            toggleTyping(true);
+            
+            const formData = new FormData();
+            formData.append('message', message);
+            
+            try {
+                const response = await fetch('', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                });
+                
+                if (response.ok) {
+                    const responseData = await response.json();
+                    toggleTyping(false);
+                    if (responseData.message) {
+                        addMessageToChat(responseData.message, false, responseData.speech);
+                    }
+                } else {
+                    throw new Error('Failed to send message');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                toggleTyping(false);
+                addMessageToChat('Error: Failed to get response', false);
+            }
+        }
+
+        let mediaRecorder;
+        let audioChunks = [];
+        const recordButton = document.getElementById('recordButton');
+        const statusElement = document.getElementById('recordingStatus');
+        const userInput = document.getElementById('user-input');
+        const form = document.querySelector('form');
+
+        recordButton.addEventListener('click', async () => {
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.addEventListener('dataavailable', event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    mediaRecorder.addEventListener('stop', async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg-3' });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.mp3');
+                        
+                        try {
+                            statusElement.textContent = 'Converting speech to text...';
+                            const response = await fetch('/convert-speech/', {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                                }
+                            });
+                            
+                            const data = await response.json();
+                            if (data.text) {
+                                try {
+                                    const parsedResponse = JSON.parse(data.text);
+                                    // Directly submit the transcript
+                                    await submitMessage(parsedResponse.transcript);
+                                } catch (e) {
+                                    // If not JSON, use the text as-is
+                                    await submitMessage(data.text);
+                                }
+                                statusElement.textContent = '';
+                            } else {
+                                statusElement.textContent = 'Error: Could not convert speech to text';
+                            }
+                        } catch (error) {
+                            statusElement.textContent = 'Error processing audio';
+                            console.error('Error:', error);
+                        }
+                    });
+
+                    mediaRecorder.start();
+                    recordButton.textContent = 'Stop Recording';
+                    recordButton.classList.add('recording');
+                    statusElement.textContent = 'Recording...';
+
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    statusElement.textContent = 'Error accessing microphone';
+                }
+            } else {
+                // Stop recording immediately when button is clicked
+                mediaRecorder.stop();
+                recordButton.textContent = 'Start Recording';
+                recordButton.classList.remove('recording');
+                statusElement.textContent = 'Processing...';
+                
+                // Stop all audio tracks
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Update form submission handler
+        document.querySelector('form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (message) {
+                submitMessage(message);
+                userInput.value = '';
+            }
+        });
     </script>
 </body>
 </html> 

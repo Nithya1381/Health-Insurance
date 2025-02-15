@@ -1,21 +1,21 @@
 import os
-import tempfile
 import shutil
+import tempfile
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 from dotenv import load_dotenv
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage
-from django.views.decorators.http import require_POST
-from django.contrib.auth.decorators import login_required
 
 from .models import ChatMessage, Document
-from .utils import (classify_question, generate_speech, get_all_documents,
-                    get_conversation_chain, get_general_chat_response,
-                    get_insurance_response, process_pdf, speech_to_text,
-                    VECTOR_STORE_DIR)
+from .utils import (VECTOR_STORE_DIR, classify_question, generate_speech,
+                    get_all_documents, get_conversation_chain,
+                    get_general_chat_response, get_insurance_response,
+                    process_pdf, speech_to_text)
 
 load_dotenv()
 
@@ -53,8 +53,12 @@ def chat(request):
                     content=response_text
                 )
                 
-                # Generate speech from response
-                speech_data = generate_speech(response_text, "en-IN", "meera")
+                # Generate speech from response using OpenAI
+                speech_data = generate_speech(
+                    text=response_text,
+                    voice="nova",  # Options: alloy, echo, fable, onyx, nova, shimmer
+                    model="tts-1"
+                )
                 
                 # Return both text and speech data
                 return JsonResponse({

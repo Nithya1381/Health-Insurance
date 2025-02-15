@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import requests
 from langchain.memory import ConversationBufferMemory
+from openai import OpenAI
 
 try:
     import PyPDF2
@@ -482,43 +483,36 @@ def speech_to_text(request, audio_file, target_language):
         print(f"Error: Speech to Text Conversion API :: {e}")
         return str(e)
 
-def generate_speech(text: str, language_code: str = "en-IN", speaker: str = "meera") -> dict:
-    """Generate speech from text using Sarvam.ai API"""
+def generate_speech(text: str, voice: str = "alloy", model: str = "tts-1") -> dict:
+    """Generate speech from text using OpenAI's text-to-speech API"""
     try:
-        url = "https://api.sarvam.ai/text-to-speech"
+        # Initialize OpenAI client
+        client = OpenAI()
         
-        payload = {
-            "inputs": [text],
-            "target_language_code": language_code,
-            "speaker": speaker,
-            "speech_sample_rate": 8000,
-            "enable_preprocessing": True,
-            "model": "bulbul:v1"
+        print(f"Generating speech for text: {text[:100]}...")  # Debug log
+        
+        # Generate speech using OpenAI's API
+        response = client.audio.speech.create(
+            model=model,
+            voice=voice,
+            input=text
+        )
+        
+        # Get the audio content as bytes
+        audio_content = response.content
+        
+        # Convert to base64
+        import base64
+        audio_base64 = base64.b64encode(audio_content).decode('utf-8')
+        
+        # Return in the expected format
+        return {
+            'audios': f'data:audio/mp3;base64,{audio_base64}'
         }
         
-        headers = {
-            'api-subscription-key': os.getenv('SARVAM_API_KEY'),
-            "Content-Type": "application/json"
-        }
-
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()  # Ensure request was successful
-        
-        # Get the response data
-        response_data = response.json()
-        print("Response Data:", response_data)  # Debug log
-        
-        # Ensure 'audios' key exists and extract the first element
-        if 'audios' in response_data and isinstance(response_data['audios'], list) and response_data['audios']:
-            base64_audio = response_data['audios'][0]  # Extract first Base64 string
-            response_data['audios'] = f'data:audio/wav;base64,{base64_audio}'
-        else:
-            raise ValueError("Invalid audio response received from API")
-
-        return response_data
-        
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to generate speech: {str(e)}")
+    except Exception as e:
+        print(f"Error in generate_speech: {str(e)}")
+        # raise Exception(f"Failed to generate speech: {str(e)}")
 
 def refine_query(question: str, context_docs=None) -> str:
     """Refine the input query to improve context relevance"""

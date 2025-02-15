@@ -492,16 +492,19 @@ def generate_speech(text: str, language_code: str = "en-IN", speaker: str = "mee
         }
 
         response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
+        response.raise_for_status()  # Ensure request was successful
         
         # Get the response data
         response_data = response.json()
+        print("Response Data:", response_data)  # Debug log
         
-        # Convert audio data to base64 if it's not already
-        if 'audio_content' in response_data and not response_data['audio_content'].startswith('data:audio'):
-            audio_content = response_data['audio_content']
-            response_data['audio_content'] = f'data:audio/wav;base64,{audio_content}'
-        
+        # Ensure 'audios' key exists and extract the first element
+        if 'audios' in response_data and isinstance(response_data['audios'], list) and response_data['audios']:
+            base64_audio = response_data['audios'][0]  # Extract first Base64 string
+            response_data['audios'] = f'data:audio/wav;base64,{base64_audio}'
+        else:
+            raise ValueError("Invalid audio response received from API")
+
         return response_data
         
     except requests.exceptions.RequestException as e:

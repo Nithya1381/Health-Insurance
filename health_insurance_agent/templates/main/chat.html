@@ -218,6 +218,62 @@
             width: 16px;
             height: 16px;
         }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .wave-loader {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 20px;
+        }
+
+        .wave-bar {
+            width: 3px;
+            height: 100%;
+            background: var(--primary-color);
+            animation: wave 1s ease-in-out infinite;
+            transform-origin: bottom;
+        }
+
+        @keyframes wave {
+            0%, 100% { transform: scaleY(0.3); }
+            50% { transform: scaleY(1); }
+        }
+
+        .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        .control-button {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            padding: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-button svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .control-button:hover {
+            opacity: 0.8;
+        }
+
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -363,7 +419,74 @@
             }
         }
 
-        // Function to add message to chat
+        function createWaveLoader() {
+            const wave = document.createElement('div');
+            wave.className = 'wave-loader';
+            for (let i = 0; i < 5; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'wave-bar';
+                wave.appendChild(bar);
+            }
+            return wave;
+        }
+
+        function createAudioControls(audioData) {
+            const controls = document.createElement('div');
+            controls.className = 'audio-controls';
+
+            const playButton = document.createElement('button');
+            playButton.className = 'control-button play-button';
+            playButton.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+            `;
+
+            const pauseButton = document.createElement('button');
+            pauseButton.className = 'control-button pause-button hidden';
+            pauseButton.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+            `;
+
+            const waveLoader = createWaveLoader();
+            waveLoader.classList.add('hidden');
+
+            controls.appendChild(playButton);
+            controls.appendChild(pauseButton);
+            controls.appendChild(waveLoader);
+
+            let audio = new Audio(audioData);
+
+            playButton.onclick = () => {
+                audio.play();
+                playButton.classList.add('hidden');
+                pauseButton.classList.remove('hidden');
+                waveLoader.classList.remove('hidden');
+            };
+
+            pauseButton.onclick = () => {
+                audio.pause();
+                pauseButton.classList.add('hidden');
+                playButton.classList.remove('hidden');
+                waveLoader.classList.add('hidden');
+            };
+
+            audio.addEventListener('ended', () => {
+                pauseButton.classList.add('hidden');
+                playButton.classList.remove('hidden');
+                waveLoader.classList.add('hidden');
+            });
+
+            // Auto-play when message is added
+            setTimeout(() => {
+                playButton.click();
+            }, 500);
+
+            return controls;
+        }
+
         function addMessageToChat(content, isUser = true, speechData = null) {
             const wrapper = document.createElement('div');
             wrapper.className = 'message-wrapper';
@@ -372,22 +495,9 @@
             message.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
             message.textContent = content;
             
-            if (!isUser && speechData) {
-                const controls = document.createElement('div');
-                controls.className = 'message-controls';
-                
-                const playButton = document.createElement('button');
-                playButton.className = 'play-button';
-                playButton.innerHTML = `
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z"/>
-                    </svg>
-                    Play Response
-                `;
-                playButton.onclick = () => playAudio(speechData.audio_content);
-                
-                controls.appendChild(playButton);
-                message.appendChild(controls);
+            if (!isUser && speechData && speechData.audios) {
+                const audioControls = createAudioControls(speechData.audios);
+                message.appendChild(audioControls);
             }
             
             wrapper.appendChild(message);

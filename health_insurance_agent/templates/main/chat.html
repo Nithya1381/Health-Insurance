@@ -53,20 +53,49 @@
         button:hover {
             background-color: #0056b3;
         }
+        .system-message {
+            background-color: #fff3cd;
+            margin: 10px 0;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <h1>AI Health Insurance Assistant</h1>
-    <div class="chat-container" id="chat-container">
+    
+    <div style="margin-bottom: 20px;">
+        <a href="{% url 'main:uploads' %}" style="color: #007bff; text-decoration: none;">
+            Manage Documents →
+        </a>
+    </div>
+
+    {% if messages %}
+    <div class="messages" style="margin: 20px 0;">
         {% for message in messages %}
-            <div class="message {% if message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
-                {{ message.content }}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}" 
+                 style="padding: 10px; margin: 5px 0; border-radius: 5px; 
+                        {% if message.tags == 'error' %}
+                            background-color: #f8d7da; color: #721c24;
+                        {% else %}
+                            background-color: #d4edda; color: #155724;
+                        {% endif %}">
+                {{ message }}
             </div>
         {% endfor %}
     </div>
+    {% endif %}
+
+    <div class="chat-container" id="chat-container">
+        {% for chat_message in chat_messages %}
+            <div class="message {% if chat_message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                {{ chat_message.content }}
+            </div>
+        {% endfor %}
+    </div>
+
     <form method="post" class="input-container">
         {% csrf_token %}
-        <input type="text" id="user-input" name="message" placeholder="Type your message here..." required>
+        <input type="text" id="user-input" name="message" placeholder="Ask about insurance policies..." required>
         <button type="submit">Send</button>
     </form>
 

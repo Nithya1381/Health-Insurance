@@ -1,12 +1,13 @@
 import os
 
-from django.conf import settings
-from django.shortcuts import render
+from django.contrib import messages
+from django.shortcuts import redirect, render
 from dotenv import load_dotenv
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage
 
-from .models import ChatMessage
+from .models import ChatMessage, Document
+from .utils import get_all_documents, get_conversation_chain, process_pdf
 
 load_dotenv()
 
@@ -22,32 +23,69 @@ def home(request):
 
 def chat(request):
     if request.method == 'POST':
-        user_message = request.POST.get('message')
-        
-        # Save user message to database
-        ChatMessage.objects.create(role='user', content=user_message)
-        
-        # Initialize ChatOpenAI
-        chat = ChatOpenAI(
-            temperature=0.7,
-            openai_api_key=os.getenv('OPENAI_API_KEY'),
-            model_name="gpt-3.5-turbo"
-        )
-        
-        # Get chat history
-        messages = []
-        for msg in ChatMessage.objects.all():
-            if msg.role == 'user':
-                messages.append(HumanMessage(content=msg.content))
-            else:
-                messages.append(AIMessage(content=msg.content))
-        
-        # Get AI response
-        response = chat(messages)
-        
-        # Save AI response to database
-        ChatMessage.objects.create(role='assistant', content=response.content)
+        if 'message' in request.POST:
+            user_message = request.POST.get('message')
+            ChatMessage.objects.create(role='user', content=user_message)
+            
+            try:
+                # Get conversation chain
+                conversation_chain = get_conversation_chain()
+                
+                # Get chat history
+                chat_history = []
+                for msg in ChatMessage.objects.filter(role__in=['user', 'assistant']):
+                    if msg.role == 'user':
+                        chat_history.append((msg.content, ''))
+                
+                # Get response from LLM
+                response = conversation_chain({
+                    "question": user_message,
+                    "chat_history": chat_history
+                })
+                
+                # Save AI response
+                ChatMessage.objects.create(
+                    role='assistant',
+                    content=response['answer']
+                )
+            
+            except Exception as e:
+                messages.error(request, f'Error: {str(e)}')
     
-    # Get all messages for display
-    messages = ChatMessage.objects.all()
-    return render(request, 'main/chat.html', {'messages': messages})
+    chat_messages = ChatMessage.objects.filter(role__in=['user', 'assistant'])
+    return render(request, 'main/chat.html', {'chat_messages': chat_messages})
+
+def uploads(request):
+    if request.method == 'POST' and request.FILES.get('document'):
+        print("request.FILES",request.FILES)
+        document = request.FILES['document']
+        if not document.name.endswith('.pdf'):
+            messages.error(request, 'Please upload a PDF file')
+            return redirect('main:uploads')
+        
+        try:
+            # Save document
+            doc = Document.objects.create(file=document)
+            
+            # Process and store in vector database
+            print("Processing document...")
+            result = process_pdf(document)
+            doc.processed = True
+            doc.save()
+            messages.success(request, 'Document uploaded and processed successfully!')
+            
+        except Exception as e:
+            messages.error(request, f'Error processing document: {str(e)}')
+            if doc.id:
+                doc.delete()  # Clean up the document if processing failed
+    
+    documents = Document.objects.all().order_by('-uploaded_at')
+    return render(request, 'main/uploads.html', {'documents': documents})
+
+def view_documents(request):
+    try:
+        docs_data = get_all_documents()
+        return render(request, 'main/documents.html', {'data': docs_data})
+    except Exception as e:
+        messages.error(request, str(e))
+        return redirect('main:uploads')

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stored Documents</title>
+    <style>
+        body {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .nav-links {
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #007bff;
+            margin-right: 20px;
+        }
+        .document-card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .metadata {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .content {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        .error {
+            color: #721c24;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .summary {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="{% url 'main:chat' %}">← Back to Chat</a>
+        <a href="{% url 'main:uploads' %}">Upload Documents</a>
+    </div>
+
+    <h1>Stored Documents</h1>
+
+    {% if data.error %}
+        <div class="error">
+            {{ data.error }}
+        </div>
+    {% else %}
+        <div class="summary">
+            Total Documents: {{ data.total_documents }}
+        </div>
+
+        {% for doc in data.documents %}
+            <div class="document-card">
+                <h3>{{ doc.filename }}</h3>
+                
+                <h4>Extracted Information:</h4>
+                <div class="metadata">
+                    <pre>{{ doc.extracted_info|pprint }}</pre>
+                </div>
+
+                <h4>Content Preview:</h4>
+                <div class="content">
+                    {{ doc.content }}
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+</body>
+</html> 

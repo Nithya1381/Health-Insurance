@@ -24,6 +24,7 @@ try:
     from langchain.chains import ConversationalRetrievalChain, LLMChain
     from langchain.prompts import PromptTemplate
     from langchain.schema import Document
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
     from langchain_community.chat_models import ChatOpenAI
     from langchain_community.embeddings import OpenAIEmbeddings
     from langchain_community.vectorstores import FAISS
@@ -99,25 +100,77 @@ def extract_text_from_pdf(pdf_path):
 
 def extract_insurance_info(text):
     """Extract structured information from insurance document"""
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, max_tokens=2000)
-    prompt_template = PromptTemplate(
-        input_variables=["document"],
-        template="""
-        Extract the following fields from the insurance document:
-        - Policy Type
-        - Coverage Amount
-        - Premium Amount
-        - Policy Period
-        - Key Benefits
-        - Exclusions
-        Output the result in JSON format.
-        Document:
-        {document}
-        """
+    # Create text splitter
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=4000,  # Smaller chunks to stay within token limits
+        chunk_overlap=200,
+        length_function=len,
+        separators=["\n\n", "\n", " ", ""]
     )
-    chain = LLMChain(llm=llm, prompt=prompt_template)
-    result = chain.run(document=text)
-    return result
+    
+    # Split text into chunks
+    chunks = text_splitter.split_text(text)
+    
+    # Process each chunk and combine results
+    all_results = []
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, max_tokens=1000)
+    
+    for i, chunk in enumerate(chunks):
+        print(f"Processing chunk {i+1} of {len(chunks)}...")
+        
+        prompt_template = PromptTemplate(
+            input_variables=["document_chunk"],
+            template="""Extract any of the following fields present in this portion of the insurance document:
+            - Policy Type
+            - Coverage Amount
+            - Premium Amount
+            - Policy Period
+            - Key Benefits
+            - Exclusions
+            
+            Only include fields that are clearly mentioned in this text. Output in JSON format.
+            If no relevant information is found, return an empty JSON object {}.
+            
+            Document chunk:
+            {document_chunk}
+            """
+        )
+        
+        chain = LLMChain(llm=llm, prompt=prompt_template)
+        try:
+            result = chain.run(document_chunk=chunk)
+            chunk_data = json.loads(result)
+            if chunk_data:  # Only append if we found some information
+                all_results.append(chunk_data)
+        except Exception as e:
+            print(f"Error processing chunk {i+1}: {str(e)}")
+            continue
+    
+    # Combine results from all chunks
+    combined_result = {
+        "Policy Type": None,
+        "Coverage Amount": None,
+        "Premium Amount": None,
+        "Policy Period": None,
+        "Key Benefits": [],
+        "Exclusions": []
+    }
+    
+    # Merge all results into one
+    for result in all_results:
+        for key, value in result.items():
+            if key in ["Key Benefits", "Exclusions"]:
+                if value and isinstance(value, list):
+                    combined_result[key].extend(value)
+            else:
+                if value and not combined_result[key]:
+                    combined_result[key] = value
+    
+    # Remove duplicates from lists
+    combined_result["Key Benefits"] = list(set(combined_result["Key Benefits"]))
+    combined_result["Exclusions"] = list(set(combined_result["Exclusions"]))
+    
+    return json.dumps(combined_result)
 
 def process_pdf(pdf_file):
     # Check dependencies
@@ -134,38 +187,49 @@ def process_pdf(pdf_file):
             for chunk in pdf_file.chunks():
                 destination.write(chunk)
 
-        # Extract text using both methods
+        # Extract text from PDF
         print("Extracting text from PDF...")
         pdf_text = extract_text_from_pdf(temp_path)
-        print("Combining text...")
-        combined_text = pdf_text
-
-        print(combined_text, "combined_text")
         
-        if not combined_text.strip():
+        if not pdf_text.strip():
             raise Exception("No text could be extracted from the PDF")
 
-        # Extract structured information
-        extracted_data = extract_insurance_info(combined_text)
-        extracted_json = json.loads(extracted_data)
-        print(extracted_json, "extracted_json")
-
-        # Create a Document object with metadata
-        print("Document creating...")
-        doc = Document(
-            page_content=combined_text,
-            metadata={
-                "filename": pdf_file.name,
-                "extracted_info": extracted_json
-            }
+        # Split text for vector storage
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=100,
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""]
         )
-        print("Document created...")
+        
+        # Extract structured information
+        print("Extracting insurance information...")
+        extracted_data = extract_insurance_info(pdf_text)
+        extracted_json = json.loads(extracted_data)
+        print("Extracted info:", extracted_json)
+
+        # Create document chunks
+        print("Creating document chunks...")
+        text_chunks = text_splitter.split_text(pdf_text)
+        docs = []
+        for i, chunk in enumerate(text_chunks):
+            docs.append(Document(
+                page_content=chunk,
+                metadata={
+                    "filename": pdf_file.name,
+                    "chunk": i+1,
+                    "total_chunks": len(text_chunks),
+                    "extracted_info": extracted_json
+                }
+            ))
+
+        print(f"Created {len(docs)} document chunks")
+
         # Store in FAISS
         embedding = OpenAIEmbeddings()
-        print("Embedding...")
-        # Check if there's an existing vector store
+        print("Creating embeddings...")
+        
         if os.path.exists(os.path.join(VECTOR_STORE_DIR, "index.faiss")):
-            # Load existing vector store and add new documents
             print("Loading existing vector store...")
             vectordb = FAISS.load_local(
                 VECTOR_STORE_DIR, 
@@ -173,13 +237,11 @@ def process_pdf(pdf_file):
                 allow_dangerous_deserialization=True
             )
             print("Adding documents to vector store...")
-            vectordb.add_documents([doc])
+            vectordb.add_documents(docs)
         else:
-            # Create new vector store
             print("Creating new vector store...")
-            vectordb = FAISS.from_documents([doc], embedding)
+            vectordb = FAISS.from_documents(docs, embedding)
         
-        # Save the vector store
         print("Saving vector store...")
         vectordb.save_local(VECTOR_STORE_DIR)
         print("Vector store saved...")
@@ -190,7 +252,6 @@ def process_pdf(pdf_file):
         raise Exception(f"Error processing PDF: {str(e)}")
     
     finally:
-        # Clean up temporary file
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
@@ -271,3 +332,98 @@ def get_all_documents():
         
     except Exception as e:
         return {"error": f"Error retrieving documents: {str(e)}"}
+
+def classify_question(question: str) -> dict:
+    """Classify if the question is insurance-related or general chat"""
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+    
+    prompt_template = PromptTemplate(
+        input_variables=["question"],
+        template="""Classify if the following question is related to insurance/policies or if it's general chat.
+        Question: {question}
+        
+        Return response in JSON format with two fields:
+        - "is_insurance_related": boolean (true/false)
+        - "type": string ("insurance" or "general_chat")
+        - "confidence": float (0 to 1)
+        """
+    )
+    
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+    result = chain.run(question=question)
+    return json.loads(result)
+
+def get_general_chat_response(question: str) -> str:
+    """Handle general chat questions"""
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
+    
+    prompt_template = PromptTemplate(
+        input_variables=["question"],
+        template="""You are a friendly AI assistant for a health insurance company.
+        Respond to the following general question in a professional and helpful manner.
+        If the user tries to get specific policy information, politely inform them to ask about their policy directly.
+        
+        Question: {question}
+        """
+    )
+    
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+    return chain.run(question=question)
+
+def get_insurance_response(question: str, conversation_chain) -> str:
+    """Handle insurance-related questions using the document knowledge base"""
+    try:
+        # First, search for relevant documents
+        embedding = OpenAIEmbeddings()
+        vectorstore = FAISS.load_local(
+            VECTOR_STORE_DIR, 
+            embedding,
+            allow_dangerous_deserialization=True
+        )
+        
+        # Get relevant documents
+        relevant_docs = vectorstore.similarity_search(question, k=3)
+        
+        # Extract content and metadata from relevant documents
+        context = []
+        for doc in relevant_docs:
+            context.append({
+                "content": doc.page_content,
+                "metadata": doc.metadata.get("extracted_info", {})
+            })
+        
+        # Create a prompt that includes the context
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
+        prompt_template = PromptTemplate(
+            input_variables=["question", "context"],
+            template="""You are an AI assistant for a health insurance company. Use the following context from insurance documents to answer the user's question.
+            If the information is not in the context, politely say that you don't have that specific information.
+
+            Context from insurance documents:
+            {context}
+
+            User Question: {question}
+
+            Please provide a clear, professional response based on the provided context. Include specific details from the documents when available.
+            """
+        )
+        
+        # Format context for the prompt
+        context_text = "\n\n".join([
+            f"Document {i+1}:\n"
+            f"Content: {doc['content']}\n"
+            f"Policy Details: {json.dumps(doc['metadata'], indent=2)}"
+            for i, doc in enumerate(context)
+        ])
+        
+        # Get response using the context
+        chain = LLMChain(llm=llm, prompt=prompt_template)
+        response = chain.run(
+            question=question,
+            context=context_text
+        )
+        
+        return response
+
+    except Exception as e:
+        return f"I apologize, but I encountered an error retrieving your insurance information: {str(e)}"

@@ -7,7 +7,9 @@ from langchain.chat_models import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage
 
 from .models import ChatMessage, Document
-from .utils import get_all_documents, get_conversation_chain, process_pdf
+from .utils import (classify_question, get_all_documents,
+                    get_conversation_chain, get_general_chat_response,
+                    get_insurance_response, process_pdf)
 
 load_dotenv()
 
@@ -28,25 +30,21 @@ def chat(request):
             ChatMessage.objects.create(role='user', content=user_message)
             
             try:
-                # Get conversation chain
-                conversation_chain = get_conversation_chain()
+                # First, classify the question
+                classification = classify_question(user_message)
                 
-                # Get chat history
-                chat_history = []
-                for msg in ChatMessage.objects.filter(role__in=['user', 'assistant']):
-                    if msg.role == 'user':
-                        chat_history.append((msg.content, ''))
-                
-                # Get response from LLM
-                response = conversation_chain({
-                    "question": user_message,
-                    "chat_history": chat_history
-                })
+                if classification['is_insurance_related']:
+                    # Get conversation chain for insurance questions
+                    conversation_chain = get_conversation_chain()
+                    response_text = get_insurance_response(user_message, conversation_chain)
+                else:
+                    # Handle general chat
+                    response_text = get_general_chat_response(user_message)
                 
                 # Save AI response
                 ChatMessage.objects.create(
                     role='assistant',
-                    content=response['answer']
+                    content=response_text
                 )
             
             except Exception as e:

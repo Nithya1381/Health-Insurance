@@ -1,0 +1,10 @@
+/*.pyc
+health_insurance_agent/*.pyc
+health_insurance_agent/migrations/*.pyc
+health_insurance_agent/health_insurance_agent/migrations/*.pyc
+health_insurance_agent/health_insurance_agent/migrations/*.pyc
+health_insurance_agent/health_insurance_agent/migrations/*.pyc
+health_insurance_agent/health_insurance_agent/migrations/*.pyc
+health_insurance_agent/health_insurance_agent/migrations/*.pyc
+
+__pycache__

@@ -117,7 +117,7 @@ def extract_insurance_info(text):
     
     # Process each chunk and combine results
     all_results = []
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, max_tokens=1000)
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0, max_tokens=1000)
     
     for i, chunk in enumerate(chunks):
         print(f"Processing chunk {i+1} of {len(chunks)}...")
@@ -275,7 +275,7 @@ def get_conversation_chain():
         # Create a conversation chain
         llm = ChatOpenAI(
             temperature=0.7,
-            model_name="gpt-3.5-turbo"
+            model_name="gpt-4"
         )
 
         memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
@@ -342,7 +342,7 @@ def get_all_documents():
 
 def classify_question(question: str) -> dict:
     """Classify if the question is insurance-related or general chat"""
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0)
     
     prompt_template = PromptTemplate(
         input_variables=["question"],
@@ -362,7 +362,7 @@ def classify_question(question: str) -> dict:
 
 def get_general_chat_response(question: str) -> str:
     """Handle general chat questions"""
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0.7)
     
     prompt_template = PromptTemplate(
         input_variables=["question"],
@@ -402,7 +402,7 @@ def get_insurance_response(question: str, conversation_chain) -> str:
             })
         
         # Create a prompt that includes both context and chat history
-        llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
+        llm = ChatOpenAI(model_name="gpt-4", temperature=0.7)
         prompt_template = PromptTemplate(
             input_variables=["original_question", "refined_question", "context", "chat_history"],
             template="""You are an AI assistant for a health insurance company. Use the following context and chat history to answer the user's question.
@@ -516,7 +516,7 @@ def generate_speech(text: str, voice: str = "alloy", model: str = "tts-1") -> di
 
 def refine_query(question: str, context_docs=None) -> str:
     """Refine the input query to improve context relevance"""
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0)
     
     # If we have context docs, include them in refinement
     context_text = ""
